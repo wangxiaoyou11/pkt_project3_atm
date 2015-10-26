@@ -85,7 +85,15 @@ public class ATMNIC {
 		boolean cellDropped = false;
 		double dropProbability = 0.0;
 		
-		outputBuffer.add(cell);
+		int outputSize = outputBuffer.size();
+		if(outputSize > startDropAt) {
+			dropProbability = (double)(outputBuffer.size() - startDropAt) / (double)(maximumBufferCells - startDropAt);
+			if(Math.random() <= dropProbability )
+				cellDropped = true;
+		}
+		if(!cellDropped) {
+			outputBuffer.add(cell);
+		}
 		
 		// Output to the console what happened
 		if(cellDropped)
