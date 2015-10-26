@@ -8,6 +8,7 @@
 package NetworkElements;
 
 import java.util.*;
+
 import DataTypes.*;
 
 public class ATMRouter implements IATMCellConsumer{
@@ -50,11 +51,87 @@ public class ATMRouter implements IATMCellConsumer{
 		
 		if(cell.getIsOAM()){
 			// What's OAM for?
+			String data = cell.getData();
+			if(data.startsWith("setup")) {
+				this.receivedSetup(cell);
+				int destAddr = this.getIntFromEndOfString(data);
+				//check whether the router is setting up a connection
+				if(currentConnAttemptNIC != null) {
+					ATMCell waitCell = new ATMCell(0, "wait " + destAddr, this.getTraceID());
+					waitCell.setIsOAM(true);
+					nic.sendCell(waitCell, this);
+					this.sentWait(waitCell);
+				} else {
+					//send call proceeding
+					ATMCell ackCell = new ATMCell(0, "callpro", this.getTraceID());
+					ackCell.setIsOAM(true);	
+					nic.sendCell(ackCell, this);
+					this.sentCallProceeding(cell);
+					//check the destAddr
+					if(address == destAddr) {
+						int freeVC = this.getFirstFreeVC();
+						ATMCell connCell = new ATMCell(0, "conn " + freeVC, this.getTraceID());
+						connCell.setIsOAM(true);
+						nic.sendCell(connCell, this);
+						this.sentConnect(connCell);
+					} else {
+						currentConnAttemptNIC = nic;
+						nextHop.get(destAddr).sendCell(cell, this);
+						this.sentSetup(cell);
+					}
+				}
+			} else if(data.startsWith("callpro")) {
+				this.receivedCallProceeding(cell);
+			} else if(data.startsWith("wait")) {
+				this.receivedWait(cell);
+				int destAddr = this.getIntFromEndOfString(data);
+				ATMCell setupCell = new ATMCell(0, "setup " + destAddr, this.getTraceID());
+				setupCell.setIsOAM(true);
+				nic.sendCell(setupCell, this);
+				this.sentSetup(setupCell);
+			} else if(data.startsWith("conn")) {
+				this.receivedConnect(cell);
+				if(currentConnAttemptNIC != null) {
+					int outVcNum = this.getIntFromEndOfString(data);
+					int inVcNum = this.getFirstFreeVC();
+					VCtoVC.put(inVcNum, new NICVCPair(nic, outVcNum));
+					//send connect ack
+					ATMCell callackCell = new ATMCell(0, "callack", this.getTraceID());
+					callackCell.setIsOAM(true);
+					nic.sendCell(callackCell, this);
+					this.sentConnectAck(callackCell);
+					//send connect to downstream router
+					ATMCell connCell = new ATMCell(0, "conn " + inVcNum, this.getTraceID());
+					connCell.setIsOAM(true);
+					currentConnAttemptNIC.sendCell(connCell, this);
+					this.sentConnect(connCell);
+					currentConnAttemptNIC = null;
+				} else {
+					
+				}
+			} else if(data.startsWith("callack")) {
+				this.receiveConnectAck(cell);
+			} else if(data.startsWith("endack")) {
+				
+			} else if(data.startsWith("end")) {
+				
+			}
 		}
 		else{
 			// find the nic and new VC number to forward the cell on
 			// otherwise the cell has nowhere to go. output to the console and drop the cell
 		}		
+	}
+	
+	/**
+	 * Gets the free VC number in this router
+	 * @return first free VC number
+	 */
+	private int getFirstFreeVC() {
+		int i = 1;
+		while(VCtoVC.containsKey(i))
+			i ++;
+		return i;
 	}
 	
 	/**

@@ -7,6 +7,8 @@
 
 package NetworkElements;
 
+import java.util.HashMap;
+
 import DataTypes.*;
 
 public class Computer implements IATMCellConsumer{
@@ -15,6 +17,8 @@ public class Computer implements IATMCellConsumer{
 	private int traceID = (int) (Math.random() * 100000);
 	private int vcNumber=-1;
 	private String address="";
+	private HashMap<Integer, Integer> routeMap = new HashMap<>();//Key: destAddr, Value: VC number
+	private int destToConnect = -1;
 	
 	/**
 	 * The default constructor for a computer
@@ -39,7 +43,25 @@ public class Computer implements IATMCellConsumer{
 	 */
 	public void receiveCell(ATMCell cell, ATMNIC nic){
 		if(cell.getIsOAM()){
-			
+			String data = cell.getData();
+			if(data.startsWith("callpro")) {
+				this.receivedCallProceeding(cell);
+			} else if(data.startsWith("conn")) {
+				this.receivedConnect(cell);
+				int vcNum = this.getIntFromEndOfString(data);
+				if(destToConnect > 0) {
+					routeMap.put(destToConnect, vcNum);
+					destToConnect = -1;
+					System.out.println("The connection is setup on VC " + vcNum);
+				}
+				//send connect ack
+				ATMCell callackCell = new ATMCell(0, "callack", this.getTraceID());
+				callackCell.setIsOAM(true);
+				nic.sendCell(callackCell, this);
+				this.sentConnectAck(callackCell);
+			} else if(data.startsWith("callack")) {
+				
+			}
 		}
 		else{
 			
@@ -61,6 +83,7 @@ public class Computer implements IATMCellConsumer{
 		
 		// send the cell
 		this.nic.sendCell(conn , this);
+		destToConnect = toAddress;
 	}
 	
 	/**
@@ -271,4 +294,5 @@ public class Computer implements IATMCellConsumer{
 	private void sentConnectAck(ATMCell cell){
 		System.out.println("SND CALLACK: Computer "+address+" sent a connect ack message " + cell.getTraceID());
 	}
+	
 }
