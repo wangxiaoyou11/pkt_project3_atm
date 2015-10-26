@@ -112,9 +112,24 @@ public class ATMRouter implements IATMCellConsumer{
 			} else if(data.startsWith("callack")) {
 				this.receiveConnectAck(cell);
 			} else if(data.startsWith("endack")) {
-				
+				this.receivedEndAck(cell);
 			} else if(data.startsWith("end")) {
-				
+				this.receiveEnd(cell);
+				int vcNum = this.getIntFromEndOfString(data);
+				if(VCtoVC.containsKey(vcNum)) {
+					NICVCPair pair = VCtoVC.get(vcNum);
+					VCtoVC.remove(vcNum);
+					ATMCell endCell = new ATMCell(0, "end " + pair.getVC(), this.getTraceID());
+					endCell.setIsOAM(true);
+					pair.getNIC().sendCell(endCell, this);
+					this.sentEnd(endCell);
+				} else {
+					this.cellNoVC(cell);
+				}
+				ATMCell endackCell = new ATMCell(0, "endack", this.getTraceID());
+				endackCell.setIsOAM(true);
+				nic.sendCell(endackCell, this);
+				this.sentEndAck(endackCell);
 			}
 		}
 		else{
@@ -343,7 +358,7 @@ public class ATMRouter implements IATMCellConsumer{
 	 * Outputs to the console that an end message has been received
 	 * @since 1.0
 	 */
-	private void recieveEnd(ATMCell cell){
+	private void receiveEnd(ATMCell cell){
 		if(this.displayCommands)
 		System.out.println("REC ENDACK: Router " +this.address+ " received an end message " + cell.getTraceID());
 	}

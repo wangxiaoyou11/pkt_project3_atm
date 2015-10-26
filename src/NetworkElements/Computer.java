@@ -59,8 +59,16 @@ public class Computer implements IATMCellConsumer{
 				callackCell.setIsOAM(true);
 				nic.sendCell(callackCell, this);
 				this.sentConnectAck(callackCell);
-			} else if(data.startsWith("callack")) {
-				
+			} else if(data.startsWith("endack")) {
+				this.receivedEndAck(cell);
+			} else if(data.startsWith("wait")) {
+				this.receivedWait(cell);
+				//send setup again
+				int destAddr = this.getIntFromEndOfString(data);
+				ATMCell setupCell = new ATMCell(0, "setup " + destAddr, this.getTraceID());
+				setupCell.setIsOAM(true);
+				nic.sendCell(setupCell, this);
+				this.sentSetup(setupCell);
 			}
 		}
 		else{
