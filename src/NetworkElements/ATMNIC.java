@@ -19,6 +19,8 @@ public class ATMNIC {
 	private boolean tail=true, red=false, ppd=false, epd=false; // set what type of drop mechanism
 	private int maximumBufferCells = 20; // the maximum number of cells in the output buffer
 	private int startDropAt = 10; // the minimum number of cells in the output buffer before we start dropping cells
+	private IPPacket prevDroppedPacket = null;
+	private IPPacket prevAcceptedPacket = null;
 	
 	/**
 	 * Default constructor for an ATM NIC
@@ -110,8 +112,25 @@ public class ATMNIC {
 	 */
 	private void runPPD(ATMCell cell){
 		boolean cellDropped = false;
+		double dropProbability = 0.0;
 		
-		outputBuffer.add(cell);
+		if(prevDroppedPacket != null) {
+			if(cell.getPacketData() == prevDroppedPacket)
+				cellDropped = true;
+		}
+		if(!cellDropped) {
+			int outputSize = outputBuffer.size();
+			if(outputSize > startDropAt) {
+				dropProbability = (double)(outputSize - startDropAt) / (double)(maximumBufferCells - startDropAt);
+				if(Math.random() <= dropProbability ) {
+					prevDroppedPacket = cell.getPacketData();
+					cellDropped = true;
+				}
+			}
+		}
+		if(!cellDropped) {
+			outputBuffer.add(cell);
+		}
 		
 		// Output to the console what happened
 		if(cellDropped)
@@ -128,8 +147,43 @@ public class ATMNIC {
 	 */
 	private void runEPD(ATMCell cell){
 		boolean cellDropped = false;
+		boolean passCheck = false;
+		double dropProbability = 0.0;
+		IPPacket cellPacket = cell.getPacketData();
 		
-		outputBuffer.add(cell);
+		if(prevDroppedPacket != null) {
+			if(cellPacket == prevDroppedPacket)
+				cellDropped = true;
+		}
+		if(prevAcceptedPacket != null) {
+			if(cellPacket == prevAcceptedPacket)
+				passCheck = true;
+		}
+		
+		if(!passCheck && !cellDropped) {
+			int outputSize = outputBuffer.size();
+			int packetSize = cellPacket.getSize();
+			int cellSize = 48 * 8;
+			int packetNum = packetSize / cellSize;
+			if(packetNum % cellSize > 0)
+				packetNum ++;
+			for(int i = 0; i < packetNum; i ++) {
+				int tempSize = outputSize + i;
+				if(tempSize > startDropAt) {
+					dropProbability = (double)(tempSize - startDropAt) / (double)(maximumBufferCells - startDropAt);
+					if(Math.random() <= dropProbability ) {
+						prevDroppedPacket = cellPacket;
+						cellDropped = true;
+						break;
+					}
+				}
+				
+			}
+			if(!cellDropped)
+				prevAcceptedPacket = cellPacket;
+		}
+		if(!cellDropped)
+			outputBuffer.add(cell);
 		
 		// Output to the console what happened
 		if(cellDropped)
