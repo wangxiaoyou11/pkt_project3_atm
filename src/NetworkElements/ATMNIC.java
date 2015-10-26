@@ -63,7 +63,10 @@ public class ATMNIC {
 	private void runTailDrop(ATMCell cell){
 		boolean cellDropped = false;
 		
-		outputBuffer.add(cell);
+		if(outputBuffer.size() >= maximumBufferCells)
+			cellDropped = true;
+		else
+			outputBuffer.add(cell);
 		
 		// Output to the console what happened
 		if(cellDropped)
