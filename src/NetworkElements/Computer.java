@@ -49,11 +49,8 @@ public class Computer implements IATMCellConsumer{
 			} else if(data.startsWith("conn")) {
 				this.receivedConnect(cell);
 				int vcNum = this.getIntFromEndOfString(data);
-				if(destToConnect > 0) {
-					routeMap.put(destToConnect, vcNum);
-					destToConnect = -1;
-					System.out.println("The connection is setup on VC " + vcNum);
-				}
+				this.vcNumber = vcNum;
+				System.out.println("The connection is setup on VC " + this.vcNumber);
 				//send connect ack
 				ATMCell callackCell = new ATMCell(0, "callack", this.getTraceID());
 				callackCell.setIsOAM(true);
@@ -91,7 +88,6 @@ public class Computer implements IATMCellConsumer{
 		
 		// send the cell
 		this.nic.sendCell(conn , this);
-		destToConnect = toAddress;
 	}
 	
 	/**
@@ -100,12 +96,15 @@ public class Computer implements IATMCellConsumer{
 	 * @since 1.0
 	 */
 	public void endConnection(){
+		if(this.vcNumber < 0)
+			return;
 		// Create the ATM cell to send
 		ATMCell end = new ATMCell(this.vcNumber, "end " + this.vcNumber, this.getTraceID());
 		end.setIsOAM(true);
 		
 		// Output to the console
 		this.sentEnd(end);
+		this.vcNumber = -1;
 		
 		// Send the cell
 		this.nic.sendCell(end, this);

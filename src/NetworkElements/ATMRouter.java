@@ -16,6 +16,7 @@ public class ATMRouter implements IATMCellConsumer{
 	private ArrayList<ATMNIC> nics = new ArrayList<ATMNIC>(); // all of the nics in this router
 	private TreeMap<Integer, ATMNIC> nextHop = new TreeMap<Integer, ATMNIC>(); // a map of which interface to use to get to a given router on the network
 	private TreeMap<Integer, NICVCPair> VCtoVC = new TreeMap<Integer, NICVCPair>(); // a map of input VC to output nic and new VC number
+	private HashSet<Integer> endVCs = new HashSet<Integer>();
 	private boolean trace=false; // should we print out debug code?
 	private int traceID = (int) (Math.random() * 100000); // create a random trace id for cells
 	private ATMNIC currentConnAttemptNIC = null; // The nic that is currently trying to setup a connection
@@ -70,6 +71,9 @@ public class ATMRouter implements IATMCellConsumer{
 					//check the destAddr
 					if(address == destAddr) {
 						int freeVC = this.getFirstFreeVC();
+						if(this.displayCommands)
+							System.out.println("Trace (ATMRouter): First free VC = " + freeVC);
+						endVCs.add(freeVC);
 						ATMCell connCell = new ATMCell(0, "conn " + freeVC, this.getTraceID());
 						connCell.setIsOAM(true);
 						nic.sendCell(connCell, this);
@@ -116,15 +120,20 @@ public class ATMRouter implements IATMCellConsumer{
 			} else if(data.startsWith("end")) {
 				this.receiveEnd(cell);
 				int vcNum = this.getIntFromEndOfString(data);
-				if(VCtoVC.containsKey(vcNum)) {
-					NICVCPair pair = VCtoVC.get(vcNum);
-					VCtoVC.remove(vcNum);
-					ATMCell endCell = new ATMCell(0, "end " + pair.getVC(), this.getTraceID());
-					endCell.setIsOAM(true);
-					pair.getNIC().sendCell(endCell, this);
-					this.sentEnd(endCell);
+				if(!endVCs.contains(vcNum)) {
+					if(VCtoVC.containsKey(vcNum)) {
+						NICVCPair pair = VCtoVC.get(vcNum);
+						VCtoVC.remove(vcNum);
+						ATMCell endCell = new ATMCell(0, "end " + pair.getVC(), this.getTraceID());
+						endCell.setIsOAM(true);
+						pair.getNIC().sendCell(endCell, this);
+						this.sentEnd(endCell);
+					} else {
+						this.cellNoVC(cell);
+					}
 				} else {
-					this.cellNoVC(cell);
+					System.out.println("Finish freeing up VC " + vcNum);
+					endVCs.remove(vcNum);
 				}
 				ATMCell endackCell = new ATMCell(0, "endack", this.getTraceID());
 				endackCell.setIsOAM(true);
@@ -135,6 +144,18 @@ public class ATMRouter implements IATMCellConsumer{
 		else{
 			// find the nic and new VC number to forward the cell on
 			// otherwise the cell has nowhere to go. output to the console and drop the cell
+			int vcNum = cell.getVC();
+			if(endVCs.contains(vcNum)) {
+				this.cellDeadEnd(cell);
+			} else {
+				if(!VCtoVC.containsKey(vcNum)) {
+					this.cellNoVC(cell);
+				} else {
+					NICVCPair pair = VCtoVC.get(vcNum);
+					cell.setVC(pair.getVC());
+					pair.getNIC().sendCell(cell, this);
+				}
+			}
 		}		
 	}
 	

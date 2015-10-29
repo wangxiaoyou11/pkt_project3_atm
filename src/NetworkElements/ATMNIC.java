@@ -19,8 +19,7 @@ public class ATMNIC {
 	private boolean tail=true, red=false, ppd=false, epd=false; // set what type of drop mechanism
 	private int maximumBufferCells = 20; // the maximum number of cells in the output buffer
 	private int startDropAt = 10; // the minimum number of cells in the output buffer before we start dropping cells
-	private IPPacket prevDroppedPacket = null;
-	private IPPacket prevAcceptedPacket = null;
+	private boolean prevPacketDropped = false;
 	
 	/**
 	 * Default constructor for an ATM NIC
@@ -114,17 +113,22 @@ public class ATMNIC {
 		boolean cellDropped = false;
 		double dropProbability = 0.0;
 		
-		if(prevDroppedPacket != null) {
-			if(cell.getPacketData() == prevDroppedPacket)
+		if(prevPacketDropped) {
+			if(cell.getPacketData() == null) {
 				cellDropped = true;
+				System.out.println("The cell " + cell.getTraceID() + " was dropped as a subsequent packet");
+			} else {
+				prevPacketDropped = false;
+			}
 		}
 		if(!cellDropped) {
 			int outputSize = outputBuffer.size();
 			if(outputSize > startDropAt) {
 				dropProbability = (double)(outputSize - startDropAt) / (double)(maximumBufferCells - startDropAt);
 				if(Math.random() <= dropProbability ) {
-					prevDroppedPacket = cell.getPacketData();
+					prevPacketDropped = true;
 					cellDropped = true;
+					System.out.println("The cell " + cell.getTraceID() + " was dropped with probability " + dropProbability);
 				}
 			}
 		}
@@ -133,10 +137,8 @@ public class ATMNIC {
 		}
 		
 		// Output to the console what happened
-		if(cellDropped)
-			System.out.println("The cell " + cell.getTraceID() + " was dropped");
-		else
-			if(this.trace)
+			
+		if(this.trace && !cellDropped)
 			System.out.println("The cell " + cell.getTraceID() + " was added to the output queue");
 	}
 	
@@ -149,18 +151,10 @@ public class ATMNIC {
 		boolean cellDropped = false;
 		boolean passCheck = false;
 		double dropProbability = 0.0;
+		
 		IPPacket cellPacket = cell.getPacketData();
-		
-		if(prevDroppedPacket != null) {
-			if(cellPacket == prevDroppedPacket)
-				cellDropped = true;
-		}
-		if(prevAcceptedPacket != null) {
-			if(cellPacket == prevAcceptedPacket)
-				passCheck = true;
-		}
-		
-		if(!passCheck && !cellDropped) {
+		if(cellPacket != null) {
+			prevPacketDropped = false;
 			int outputSize = outputBuffer.size();
 			int packetSize = cellPacket.getSize();
 			int cellSize = 48 * 8;
@@ -172,16 +166,19 @@ public class ATMNIC {
 				if(tempSize > startDropAt) {
 					dropProbability = (double)(tempSize - startDropAt) / (double)(maximumBufferCells - startDropAt);
 					if(Math.random() <= dropProbability ) {
-						prevDroppedPacket = cellPacket;
+						System.out.println("Cell " + i + " of this packet will be dropped with probablity " + dropProbability + ", id = " + cell.getTraceID());
+						prevPacketDropped = true;
 						cellDropped = true;
 						break;
 					}
 				}
 				
 			}
-			if(!cellDropped)
-				prevAcceptedPacket = cellPacket;
+		} else {
+			if(prevPacketDropped)
+				cellDropped = true;
 		}
+		
 		if(!cellDropped)
 			outputBuffer.add(cell);
 		
